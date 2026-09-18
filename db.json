@@ -1,0 +1,14 @@
+{
+  "pedidos": [
+    {"id":"BK-201","fecha":"2026-09-02","cliente":"Supermercado El Ahorro","direccion":"Calle 72 #20-15, Bogotá","cantRopa":80,"cantLoza":40,"total":1384000,"conductor":"Carlos Sierra","ruta":"Chapinero Norte","estado":"Pendiente"},
+    {"id":"BK-202","fecha":"2026-09-07","cliente":"Distribuciones La Economía","direccion":"Carrera 24 #68-40, Bogotá","cantRopa":60,"cantLoza":30,"total":801000,"conductor":"Carlos Sierra","ruta":"Chapinero Norte","estado":"Pendiente"}
+  ],
+  "productos": [
+    {"id":"PROD-001","nombre":"Jabón líquido para ropa","categoria":"Ropa","presentacion":"1 L","stock":120,"precio":12900},
+    {"id":"PROD-002","nombre":"Lavaloza líquido","categoria":"Cocina","presentacion":"750 ml","stock":95,"precio":8900},
+    {"id":"PROD-003","nombre":"Limpiador para pisos","categoria":"Hogar","presentacion":"1 L","stock":84,"precio":10500},
+    {"id":"PROD-004","nombre":"Detergente en polvo","categoria":"Ropa","presentacion":"1 kg","stock":70,"precio":11900},
+    {"id":"PROD-005","nombre":"Jabón corporal líquido","categoria":"Cuidado personal","presentacion":"500 ml","stock":65,"precio":9800},
+    {"id":"PROD-006","nombre":"Desinfectante multiusos","categoria":"Desinfección","presentacion":"1 L","stock":110,"precio":11200}
+  ]
+}
