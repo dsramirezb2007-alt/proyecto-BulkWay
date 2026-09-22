@@ -1,9 +1,20 @@
 import { Link } from 'react-router-dom'
 
 const roles = [
-  { id:'cliente', icon:'bi-bag-check', title:'Cliente', text:'Consulta el catálogo, crea pedidos y revisa el estado de tus entregas.', path:'/login/cliente' },
-  { id:'administrador', icon:'bi-grid-1x2', title:'Administración', text:'Gestiona productos, inventario, pedidos, facturación, rutas y personal.', path:'/login/admin' },
-  { id:'conductor', icon:'bi-truck', title:'Distribución', text:'Consulta las entregas asignadas, recorridos y despachos del día.', path:'/login/conductor' },
+  {
+    id: 'cliente',
+    icon: 'bi-person',
+    title: 'Cliente',
+    text: 'Consulta productos, crea pedidos y revisa tus entregas.',
+    path: '/login/cliente',
+  },
+  {
+    id: 'conductor',
+    icon: 'bi-truck',
+    title: 'Conductor',
+    text: 'Consulta tus entregas, rutas y despachos asignados.',
+    path: '/login/conductor',
+  },
 ]
 
 function RoleLogin() {
@@ -57,14 +68,6 @@ function RoleLogin() {
               >
                 <i className="bi bi-truck" />
                 <span>Crear cuenta como conductor</span>
-              </Link>
-
-              <Link
-                to="/registro?rol=administrador"
-                className="register-option"
-              >
-                <i className="bi bi-shield-lock" />
-                <span>Crear cuenta como administrador</span>
               </Link>
             </div>    
         </main>

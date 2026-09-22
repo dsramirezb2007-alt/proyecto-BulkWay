@@ -1,65 +1,342 @@
-import { useState } from 'react'
-import { useAuth } from '../../context/AuthContext'
+import { useEffect, useState } from 'react'
+
+import { apiRequest } from '../../services/api'
+
 import Modal from '../shared/Modal'
 
+const formularioInicial = {
+  nombre: '',
+  cedula: '',
+  telefono: '',
+  correo: '',
+  zona: '',
+}
+
 function EmpleadosAdmin() {
-  const { usuario } = useAuth()
+  const [empleados, setEmpleados] = useState([])
+  const [cargando, setCargando] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [mensaje, setMensaje] = useState('')
+  const [form, setForm] = useState(formularioInicial)
 
-  const esAdministradorPrincipal =
-    usuario?.email?.toLowerCase() === 'admin@bulkway.com'
+  const cargarEmpleados = async () => {
+    try {
+      setCargando(true)
+      setMensaje('')
 
-  const claveConductores =
-    `bulkwayConductores_${usuario?.id || 'sin-usuario'}`
+      const data = await apiRequest('/conductores')
 
-  const [empleados, setEmpleados] = useState(() => {
-    const guardados = localStorage.getItem(claveConductores)
+      setEmpleados(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error(error)
+      setMensaje('No fue posible cargar los conductores.')
+      setEmpleados([])
+    } finally {
+      setCargando(false)
+    }
+  }
 
-    if (guardados) {
-      return JSON.parse(guardados)
+  useEffect(() => {
+    cargarEmpleados()
+  }, [])
+
+  const abrirNuevo = () => {
+    setForm(formularioInicial)
+    setMensaje('')
+    setOpen(true)
+  }
+
+  const cerrarModal = () => {
+    if (guardando) return
+
+    setOpen(false)
+    setForm(formularioInicial)
+    setMensaje('')
+  }
+
+  const cambiarCampo = (campo, valor) => {
+    setForm(prev => ({
+      ...prev,
+      [campo]: valor,
+    }))
+  }
+
+  const guardar = async e => {
+    e.preventDefault()
+
+    setMensaje('')
+
+    if (!form.nombre.trim()) {
+      setMensaje('Escribe el nombre del conductor.')
+      return
     }
 
-    return esAdministradorPrincipal
-      ? [
-          {
-            id: 'COND-1',
-            nombre: 'Carlos Sierra',
-            cedula: '1029384756',
-            telefono: '3204567890',
-            correo: 'carlos.sierra@distribucion.com',
-            zona: 'Bogotá Norte',
-          },
-        ]
-      : []
-  })
+    if (!form.cedula.trim()) {
+      setMensaje('Escribe la cédula del conductor.')
+      return
+    }
 
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ nombre: '', cedula: '', telefono: '', correo: '', zona: '' })
+    if (!form.telefono.trim()) {
+      setMensaje('Escribe el teléfono del conductor.')
+      return
+    }
 
-  const guardar = (e) => {
-    e.preventDefault()
-    const next = [...empleados, {...form, id: `COND-${Date.now()}`}]
-    setEmpleados(next)
-    localStorage.setItem(claveConductores, JSON.stringify(next))
-    setForm({ nombre: '', cedula: '', telefono: '', correo: '', zona: '' })
-    setOpen(false)
+    if (!form.correo.trim()) {
+      setMensaje('Escribe el correo del conductor.')
+      return
+    }
+
+    if (!form.zona.trim()) {
+      setMensaje('Escribe la zona del conductor.')
+      return
+    }
+
+    try {
+      setGuardando(true)
+
+      const nuevoConductor = {
+        id: `COND-${Date.now()}`,
+        nombre: form.nombre.trim(),
+        cedula: form.cedula.trim(),
+        telefono: form.telefono.trim(),
+        correo: form.correo.trim(),
+        zona: form.zona.trim(),
+        estado: 'Activo',
+      }
+
+      await apiRequest('/conductores', {
+        method: 'POST',
+        body: JSON.stringify(nuevoConductor),
+      })
+
+      await cargarEmpleados()
+
+      setForm(formularioInicial)
+      setOpen(false)
+      setMensaje(`El conductor ${nuevoConductor.nombre} fue registrado correctamente.`)
+    } catch (error) {
+      console.error(error)
+      setMensaje('No fue posible registrar el conductor.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const eliminar = async empleado => {
+    const confirmar = window.confirm(
+      `¿Estás seguro de eliminar a ${empleado.nombre}?`
+    )
+
+    if (!confirmar) return
+
+    try {
+      setMensaje('')
+
+      await apiRequest(`/conductores/${empleado.id}`, {
+        method: 'DELETE',
+      })
+
+      await cargarEmpleados()
+
+      setMensaje('Conductor eliminado correctamente.')
+    } catch (error) {
+      console.error(error)
+      setMensaje('No fue posible eliminar el conductor.')
+    }
   }
 
   return (
     <>
       <section className="dashboard-panel">
-        <div className="panel-head"><div><p className="eyebrow">RECURSOS HUMANOS</p><h2>Empleados y conductores</h2></div><button className="btn btn-purple" onClick={() => setOpen(true)}><i className="bi bi-person-plus" /> Agregar conductor</button></div>
-        <div className="employee-grid">
-          {empleados.map(c => <article className="employee-card" key={c.id}><div className="employee-avatar"><i className="bi bi-person" /></div><h3>{c.nombre}</h3><p>Conductor principal · {c.zona}</p><p>{c.telefono}</p><p>{c.correo}</p><span className="status success">Activo</span></article>)}
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">RECURSOS HUMANOS</p>
+            <h2>Empleados y conductores</h2>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-purple"
+            onClick={abrirNuevo}
+          >
+            <i className="bi bi-person-plus" />
+            Agregar conductor
+          </button>
         </div>
+
+        {mensaje && (
+          <div className="auth-message">
+            {mensaje}
+          </div>
+        )}
+
+        {cargando ? (
+          <div className="auth-loading">
+            Cargando conductores...
+          </div>
+        ) : empleados.length === 0 ? (
+          <div className="dashboard-empty">
+            <i className="bi bi-people" />
+
+            <h3>No hay conductores registrados</h3>
+
+            <p>
+              Registra los conductores de la empresa para poder asignarlos
+              posteriormente a las rutas.
+            </p>
+
+            <button
+              type="button"
+              className="btn btn-purple"
+              onClick={abrirNuevo}
+            >
+              <i className="bi bi-person-plus" />
+              Registrar primer conductor
+            </button>
+          </div>
+        ) : (
+          <div className="employee-grid">
+            {empleados.map(empleado => (
+              <article
+                className="employee-card"
+                key={empleado.id}
+              >
+                <div className="employee-avatar">
+                  <i className="bi bi-person" />
+                </div>
+
+                <h3>{empleado.nombre}</h3>
+
+                <p>
+                  Conductor · {empleado.zona}
+                </p>
+
+                <p>
+                  <i className="bi bi-credit-card" />{' '}
+                  {empleado.cedula}
+                </p>
+
+                <p>
+                  <i className="bi bi-telephone" />{' '}
+                  {empleado.telefono}
+                </p>
+
+                <p>
+                  <i className="bi bi-envelope" />{' '}
+                  {empleado.correo}
+                </p>
+
+                <span className="status success">
+                  {empleado.estado || 'Activo'}
+                </span>
+
+                <div className="route-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger"
+                    onClick={() => eliminar(empleado)}
+                  >
+                    <i className="bi bi-trash3" />
+                    Eliminar
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
-      <Modal open={open} title="Nuevo conductor" onClose={() => setOpen(false)}>
-        <form className="modal-form" onSubmit={guardar}>
-          {['nombre','cedula','telefono','correo','zona'].map(field => <input key={field} type={field === 'correo' ? 'email' : 'text'} placeholder={field[0].toUpperCase()+field.slice(1)} value={form[field]} onChange={e => setForm({...form, [field]: e.target.value})} required />)}
-          <button className="btn btn-purple btn-full">Guardar conductor</button>
+      <Modal
+        open={open}
+        title="Nuevo conductor"
+        onClose={cerrarModal}
+      >
+        <form
+          className="modal-form"
+          onSubmit={guardar}
+        >
+          <label>Nombre completo</label>
+
+          <input
+            type="text"
+            placeholder="Ej. Juan Pérez"
+            value={form.nombre}
+            onChange={e =>
+              cambiarCampo('nombre', e.target.value)
+            }
+            required
+          />
+
+          <label>Cédula</label>
+
+          <input
+            type="text"
+            placeholder="Ej. 1020304050"
+            value={form.cedula}
+            onChange={e =>
+              cambiarCampo('cedula', e.target.value)
+            }
+            required
+          />
+
+          <label>Teléfono</label>
+
+          <input
+            type="text"
+            placeholder="Ej. 3001234567"
+            value={form.telefono}
+            onChange={e =>
+              cambiarCampo('telefono', e.target.value)
+            }
+            required
+          />
+
+          <label>Correo electrónico</label>
+
+          <input
+            type="email"
+            placeholder="Ej. juan@empresa.com"
+            value={form.correo}
+            onChange={e =>
+              cambiarCampo('correo', e.target.value)
+            }
+            required
+          />
+
+          <label>Zona</label>
+
+          <input
+            type="text"
+            placeholder="Ej. Bogotá Norte"
+            value={form.zona}
+            onChange={e =>
+              cambiarCampo('zona', e.target.value)
+            }
+            required
+          />
+
+          {mensaje && (
+            <div className="auth-message error">
+              {mensaje}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="btn btn-purple btn-full"
+            disabled={guardando}
+          >
+            <i className="bi bi-check2-circle" />
+
+            {guardando
+              ? 'Guardando...'
+              : 'Guardar conductor'}
+          </button>
         </form>
       </Modal>
     </>
   )
 }
+
 export default EmpleadosAdmin
