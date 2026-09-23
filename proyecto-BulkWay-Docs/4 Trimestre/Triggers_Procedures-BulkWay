@@ -1,0 +1,359 @@
+```sql
+USE bulkway_db;
+
+
+
+-- TRIGGERS
+
+
+
+
+-- TRIGGER 1: ACTUALIZAR INVENTARIO
+
+
+DELIMITER $$
+
+CREATE TRIGGER actualizarInventario
+AFTER INSERT ON DetalleMovimientos
+FOR EACH ROW
+BEGIN
+
+    IF NEW.Tipo_Movimiento = 'Entrada' THEN
+
+        UPDATE Productos
+        SET Stock_Producto = Stock_Producto + NEW.cantidad
+        WHERE id_Producto = NEW.id_Producto;
+
+    ELSEIF NEW.Tipo_Movimiento = 'Salida' THEN
+
+        UPDATE Productos
+        SET Stock_Producto = Stock_Producto - NEW.cantidad
+        WHERE id_Producto = NEW.id_Producto;
+
+    END IF;
+
+END$$
+
+DELIMITER ;
+
+
+
+-- TRIGGER 2: ACTUALIZAR ESTADO DEL PEDIDO
+
+
+DELIMITER $$
+
+CREATE TRIGGER actualizarEstadoPedido
+AFTER INSERT ON Envios
+FOR EACH ROW
+BEGIN
+
+    UPDATE pedidos
+    SET Estado_Pedido = 'Asignado'
+    WHERE id_Pedido = NEW.id_Pedido
+    AND Estado_Pedido = 'Pendiente';
+
+END$$
+
+DELIMITER ;
+
+
+
+-- TRIGGER 3: VALIDAR ESTADO DEL CLIENTE
+
+
+DELIMITER $$
+
+CREATE TRIGGER validarEstadoCliente
+BEFORE INSERT ON pedidos
+FOR EACH ROW
+BEGIN
+
+    DECLARE v_estado VARCHAR(20);
+
+    SELECT Estado_Usuario
+    INTO v_estado
+    FROM Usuarios
+    WHERE id_Usuario = NEW.id_Cliente;
+
+    IF v_estado IS NULL THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'No se puede crear el pedido: el cliente no existe.';
+
+    ELSEIF v_estado <> 'Activo' THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'No se puede crear el pedido: el cliente no se encuentra Activo.';
+
+    END IF;
+
+END$$
+
+DELIMITER ;
+
+
+
+-- TRIGGER 4: VALIDAR STOCK DE SALIDA
+
+
+DELIMITER $$
+
+CREATE TRIGGER validarStockSalida
+BEFORE INSERT ON DetalleMovimientos
+FOR EACH ROW
+BEGIN
+
+    DECLARE v_stock INT;
+
+    IF NEW.Tipo_Movimiento = 'Salida' THEN
+
+        SELECT Stock_Producto
+        INTO v_stock
+        FROM Productos
+        WHERE id_Producto = NEW.id_Producto;
+
+        IF v_stock IS NULL THEN
+
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No se puede realizar la salida: el producto no existe.';
+
+        ELSEIF NEW.cantidad > v_stock THEN
+
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No se puede realizar la salida: stock insuficiente.';
+
+        END IF;
+
+    END IF;
+
+END$$
+
+DELIMITER ;
+
+
+
+-- TRIGGER 5: VALIDAR EMPLEADO DEL ENVÍO
+
+
+DELIMITER $$
+
+CREATE TRIGGER validarEmpleadoEnvio
+BEFORE INSERT ON Envios
+FOR EACH ROW
+BEGIN
+
+    DECLARE v_estado VARCHAR(20);
+    DECLARE v_rol INT;
+
+    SELECT Estado_Usuario, id_Rol
+    INTO v_estado, v_rol
+    FROM Usuarios
+    WHERE id_Usuario = NEW.Empleado;
+
+    IF v_estado IS NULL THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'No se puede registrar el envio: el empleado no existe.';
+
+    ELSEIF v_estado <> 'Activo' THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'No se puede registrar el envio: el empleado no esta Activo.';
+
+    ELSEIF v_rol <> 3 THEN
+
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'No se puede registrar el envio: el empleado no tiene rol de Repartidor.';
+
+    END IF;
+
+END$$
+
+DELIMITER ;
+
+
+
+-- PROCEDIMIENTOS ALMACENADOS
+
+
+
+
+-- PROCEDIMIENTO 1: GENERAR REPORTE DE CLIENTE
+
+
+DELIMITER $$
+
+CREATE PROCEDURE generarReporteCliente(IN p_idCliente INT)
+BEGIN
+
+    SELECT
+        u.nombre AS Nombre_Cliente,
+        p.id_Pedido AS Identificador_Pedido,
+        p.Fecha_Pedido AS Fecha_Pedido,
+        p.Estado_Pedido AS Estado_Pedido,
+        p.costo_productos AS Costo_Productos,
+        p.descuento AS Descuento_Aplicado,
+        rc.total_pagar AS Total_A_Pagar,
+        rc.Estado AS Estado_Factura
+
+    FROM Usuarios u
+
+    INNER JOIN pedidos p
+        ON u.id_Usuario = p.id_Cliente
+
+    LEFT JOIN ReciboCajas rc
+        ON p.id_Pedido = rc.id_Pedido
+
+    WHERE p.id_Cliente = p_idCliente
+
+    ORDER BY p.Fecha_Pedido DESC;
+
+END$$
+
+DELIMITER ;
+
+
+
+-- PROCEDIMIENTO 2: GENERAR REPORTE DE INVENTARIO
+
+
+DELIMITER $$
+
+CREATE PROCEDURE generarReporteInventario(IN p_idCategoria INT)
+BEGIN
+
+    SELECT
+        cp.Nombre_Categoria AS Categoria,
+        p.id_Producto AS ID_Producto,
+        p.Nombre_Producto AS Producto,
+        p.Precio_Producto AS Precio,
+        p.Stock_Producto AS Stock
+
+    FROM Productos p
+
+    INNER JOIN CategoriaProductos cp
+        ON p.id_CategoriaProducto = cp.id_CategoriaProducto
+
+    WHERE p.id_CategoriaProducto = p_idCategoria
+
+    ORDER BY p.Stock_Producto ASC;
+
+END$$
+
+DELIMITER ;
+
+
+
+-- PROCEDIMIENTO 3: CONSULTAR PEDIDOS POR ESTADO
+
+
+DELIMITER $$
+
+CREATE PROCEDURE consultarPedidosPorEstado(IN p_estadoPedido VARCHAR(20))
+BEGIN
+
+    SELECT
+        p.id_Pedido AS ID_Pedido,
+        u.nombre AS Cliente,
+        p.Fecha_Pedido,
+        p.Estado_Pedido,
+        p.costo_productos AS Costo_Productos,
+        p.descuento AS Descuento,
+        rc.total_pagar AS Total_Pagar,
+        rc.Estado AS Estado_Factura
+
+    FROM pedidos p
+
+    INNER JOIN Usuarios u
+        ON p.id_Cliente = u.id_Usuario
+
+    LEFT JOIN ReciboCajas rc
+        ON p.id_Pedido = rc.id_Pedido
+
+    WHERE p.Estado_Pedido = p_estadoPedido
+
+    ORDER BY p.Fecha_Pedido DESC;
+
+END$$
+
+DELIMITER ;
+
+
+
+-- PROCEDIMIENTO 4: GENERAR REPORTE DE VENTAS
+
+
+DELIMITER $$
+
+CREATE PROCEDURE generarReporteVentas(
+    IN p_fechaInicio DATE,
+    IN p_fechaFin DATE
+)
+BEGIN
+
+    SELECT
+        COUNT(p.id_Pedido) AS Cantidad_Pedidos,
+        SUM(p.costo_productos) AS Costo_Total_Productos,
+        SUM(p.descuento) AS Total_Descuentos,
+        SUM(rc.total_pagar) AS Total_Ventas
+
+    FROM pedidos p
+
+    INNER JOIN ReciboCajas rc
+        ON p.id_Pedido = rc.id_Pedido
+
+    WHERE DATE(p.Fecha_Pedido)
+    BETWEEN p_fechaInicio AND p_fechaFin
+
+    AND rc.Estado = 'Pago';
+
+END$$
+
+DELIMITER ;
+
+
+
+-- PROCEDIMIENTO 5: CONSULTAR PRODUCTOS BAJO STOCK
+
+
+DELIMITER $$
+
+CREATE PROCEDURE consultarProductosBajoStock(IN p_stockMaximo INT)
+BEGIN
+
+    SELECT
+        p.id_Producto AS ID_Producto,
+        p.Nombre_Producto AS Producto,
+        cp.Nombre_Categoria AS Categoria,
+        p.Stock_Producto AS Stock_Actual,
+        p.Precio_Producto AS Precio
+
+    FROM Productos p
+
+    INNER JOIN CategoriaProductos cp
+        ON p.id_CategoriaProducto = cp.id_CategoriaProducto
+
+    WHERE p.Stock_Producto <= p_stockMaximo
+
+    ORDER BY p.Stock_Producto ASC;
+
+END$$
+
+DELIMITER ;
+
+
+
+-- PRUEBAS DE LOS PROCEDIMIENTOS
+
+
+CALL generarReporteCliente(2);
+
+CALL generarReporteInventario(4);
+
+CALL consultarPedidosPorEstado('Pendiente');
+
+CALL generarReporteVentas('2026-09-01', '2026-09-15');
+
+CALL consultarProductosBajoStock(100);
+```
